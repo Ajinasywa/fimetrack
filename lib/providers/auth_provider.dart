@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/user.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthProvider extends ChangeNotifier {
   bool _isAuthenticated = false;
@@ -29,6 +30,10 @@ class AuthProvider extends ChangeNotifier {
       
       // Simulasi signup logic
       await Future.delayed(const Duration(seconds: 1));
+      // Simpan data user ke SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('user_fullName_$email', fullName);
+      await prefs.setString('user_password_$email', password); // Simpan password juga untuk simulasi
       _user = User(
         id: DateTime.now().toString(), // Simulasi ID
         email: email,
@@ -54,10 +59,19 @@ class AuthProvider extends ChangeNotifier {
       
       // Simulasi signin logic
       await Future.delayed(const Duration(seconds: 1));
+      final prefs = await SharedPreferences.getInstance();
+      final storedPassword = prefs.getString('user_password_$email');
+      final fullName = prefs.getString('user_fullName_$email') ?? 'Pengguna';
+      if (storedPassword == null || storedPassword != password) {
+        _error = 'Email atau password salah';
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
       _user = User(
         id: 'user-123', // Simulasi ID
         email: email,
-        fullName: 'Pengguna', // Nama default untuk signin
+        fullName: fullName,
       );
       _isAuthenticated = true;
       _isLoading = false;

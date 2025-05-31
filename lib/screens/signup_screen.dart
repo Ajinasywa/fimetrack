@@ -38,7 +38,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       if (!mounted) return;
 
       if (success) {
-        Navigator.pushReplacementNamed(context, '/home');
+        Navigator.pushReplacementNamed(context, '/signin');
       }
     } else if (!_acceptTerms) {
       ScaffoldMessenger.of(context).showSnackBar(
