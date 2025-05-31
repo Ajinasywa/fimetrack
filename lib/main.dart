@@ -9,6 +9,8 @@ import 'providers/auth_provider.dart';  // Ensure this is imported
 import 'widgets/auth_wrapper.dart';
 import 'screens/signin_screen.dart';  // Ensure this is imported
 import 'screens/signup_screen.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
@@ -16,6 +18,10 @@ final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Inisialisasi Firebase
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   
   // Initialize notifications
   const AndroidInitializationSettings initializationSettingsAndroid =

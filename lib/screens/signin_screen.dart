@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
@@ -47,21 +48,27 @@ class _SignInScreenState extends State<SignInScreen> {
       );
       return;
     }
-    
-    // TODO: Implement password reset using AuthProvider if needed
-    // try {
-    //   await authProvider.resetPassword(_emailController.text.trim());
-    //   if (mounted) {
-    //     ScaffoldMessenger.of(context).showSnackBar(
-    //       const SnackBar(
-    //         content: Text('Link reset password telah dikirim ke email Anda'),
-    //       ),
-    //     );
-    //   }
-    // } catch (e) {
-    //   // Handle error
-    // }
-    print('Password reset requested for: ${_emailController.text.trim()}');
+    try {
+      await Provider.of<AuthProvider>(context, listen: false);
+      await fb_auth.FirebaseAuth.instance.sendPasswordResetEmail(
+        email: _emailController.text.trim(),
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Link reset password telah dikirim ke email Anda'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal mengirim reset password: ${e.toString()}'),
+          ),
+        );
+      }
+    }
   }
 
   @override

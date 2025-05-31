@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/user.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
 
 class AuthProvider extends ChangeNotifier {
   bool _isAuthenticated = false;
@@ -20,6 +20,19 @@ class AuthProvider extends ChangeNotifier {
 
   AuthProvider() {
     _init();
+    _checkAuth();
+  }
+
+  Future<void> _checkAuth() async {
+    final fbUser = fb_auth.FirebaseAuth.instance.currentUser;
+    if (fbUser != null) {
+      _user = User(id: fbUser.uid, email: fbUser.email ?? '', fullName: fbUser.displayName ?? '');
+      _isAuthenticated = true;
+    } else {
+      _user = null;
+      _isAuthenticated = false;
+    }
+    notifyListeners();
   }
 
   Future<bool> signUp(String email, String password, String fullName) async {
@@ -27,22 +40,23 @@ class AuthProvider extends ChangeNotifier {
       _isLoading = true;
       _error = null;
       notifyListeners();
-      
-      // Simulasi signup logic
-      await Future.delayed(const Duration(seconds: 1));
-      // Simpan data user ke SharedPreferences
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('user_fullName_$email', fullName);
-      await prefs.setString('user_password_$email', password); // Simpan password juga untuk simulasi
-      _user = User(
-        id: DateTime.now().toString(), // Simulasi ID
+      final credential = await fb_auth.FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: email,
-        fullName: fullName,
+        password: password,
       );
-      _isAuthenticated = true;
+      await credential.user?.updateDisplayName(fullName);
+      await credential.user?.reload();
+      final updatedUser = fb_auth.FirebaseAuth.instance.currentUser;
+      _user = User(id: updatedUser?.uid ?? '', email: updatedUser?.email ?? '', fullName: updatedUser?.displayName ?? '');
+      _isAuthenticated = false; // Tetap false agar user harus login dulu
       _isLoading = false;
       notifyListeners();
       return true;
+    } on fb_auth.FirebaseAuthException catch (e) {
+      _error = e.message;
+      _isLoading = false;
+      notifyListeners();
+      return false;
     } catch (e) {
       _error = e.toString();
       _isLoading = false;
@@ -56,27 +70,21 @@ class AuthProvider extends ChangeNotifier {
       _isLoading = true;
       _error = null;
       notifyListeners();
-      
-      // Simulasi signin logic
-      await Future.delayed(const Duration(seconds: 1));
-      final prefs = await SharedPreferences.getInstance();
-      final storedPassword = prefs.getString('user_password_$email');
-      final fullName = prefs.getString('user_fullName_$email') ?? 'Pengguna';
-      if (storedPassword == null || storedPassword != password) {
-        _error = 'Email atau password salah';
-        _isLoading = false;
-        notifyListeners();
-        return false;
-      }
-      _user = User(
-        id: 'user-123', // Simulasi ID
+      final credential = await fb_auth.FirebaseAuth.instance.signInWithEmailAndPassword(
         email: email,
-        fullName: fullName,
+        password: password,
       );
+      final fbUser = credential.user;
+      _user = User(id: fbUser?.uid ?? '', email: fbUser?.email ?? '', fullName: fbUser?.displayName ?? '');
       _isAuthenticated = true;
       _isLoading = false;
       notifyListeners();
       return true;
+    } on fb_auth.FirebaseAuthException catch (e) {
+      _error = e.message;
+      _isLoading = false;
+      notifyListeners();
+      return false;
     } catch (e) {
       _error = e.toString();
       _isLoading = false;
@@ -90,7 +98,7 @@ class AuthProvider extends ChangeNotifier {
       _isLoading = true;
       _error = null;
       notifyListeners();
-      
+      await fb_auth.FirebaseAuth.instance.signOut();
       _isAuthenticated = false;
       _user = null;
       _isLoading = false;
