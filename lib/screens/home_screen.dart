@@ -10,6 +10,12 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
     final user = authProvider.user;
+    final provider = Provider.of<MenstrualCycleProvider>(context, listen: false);
+
+    // Load data dari database jika user baru login
+    if (user != null) {
+      provider.loadFromDatabase();
+    }
 
     return Scaffold(
       body: SafeArea(
@@ -33,6 +39,7 @@ class HomeScreen extends StatelessWidget {
                       icon: const Icon(Icons.logout),
                       onPressed: () async {
                         await authProvider.signOut();
+                        provider.resetData();
                         if (context.mounted) {
                           Navigator.pushReplacementNamed(context, '/');
                         }

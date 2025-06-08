@@ -49,7 +49,7 @@ class _SignInScreenState extends State<SignInScreen> {
       return;
     }
     try {
-      await Provider.of<AuthProvider>(context, listen: false);
+      Provider.of<AuthProvider>(context, listen: false);
       await fb_auth.FirebaseAuth.instance.sendPasswordResetEmail(
         email: _emailController.text.trim(),
       );

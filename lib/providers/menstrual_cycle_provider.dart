@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../repositories/calendar_repository.dart';
+import '../models/calendar_entry.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 enum CyclePhase {
   menstruation,
@@ -22,13 +24,9 @@ class MenstrualCycleProvider with ChangeNotifier {
   MoodType? _selectedMood;
   String _symptoms = '';
   String _notes = '';
-  
-  // Average cycle lengths
+  Set<DateTime> menstruationDates = {};
   final int _averageCycleLength = 28;
-  final int _averageMenstruationDays = 5;
-  final int _averageFollicularDays = 11;
-  final int _averageOvulationDays = 1;
-  final int _averageLutealDays = 11;
+  final CalendarRepository _repository = CalendarRepository();
 
   DateTime? get periodStartDate => _periodStartDate;
   DateTime? get periodEndDate => _periodEndDate;
@@ -74,35 +72,18 @@ class MenstrualCycleProvider with ChangeNotifier {
   }
 
   CyclePhase getPhaseForDate(DateTime date) {
-    if (_periodStartDate == null) return CyclePhase.menstruation;
-
-    final daysSinceStart = date.difference(_periodStartDate!).inDays;
-    
-    // If date is within menstruation period
-    if (_periodEndDate != null && 
-        date.isAfter(_periodStartDate!.subtract(const Duration(days: 1))) && 
-        date.isBefore(_periodEndDate!.add(const Duration(days: 1)))) {
+    if (menstruationDates.contains(DateTime(date.year, date.month, date.day))) {
       return CyclePhase.menstruation;
     }
-
-    // Calculate phase based on cycle day
-    final cycleDay = daysSinceStart % _averageCycleLength;
-    
-    if (cycleDay < _averageMenstruationDays) {
-      return CyclePhase.menstruation;
-    } else if (cycleDay < _averageMenstruationDays + _averageFollicularDays) {
+    // Logika fase lain bisa dikembangkan sesuai kebutuhan
+    // Sementara: setelah menstruasi, masuk ke fase folikular
+    if (_periodEndDate != null && date.isAfter(_periodEndDate!)) {
       return CyclePhase.follicular;
-    } else if (cycleDay < _averageMenstruationDays + _averageFollicularDays + _averageOvulationDays) {
-      return CyclePhase.ovulation;
-    } else if (cycleDay < _averageMenstruationDays + _averageFollicularDays + _averageOvulationDays + _averageLutealDays) {
-      return CyclePhase.luteal;
-    } else {
-      return CyclePhase.menstruation; // Start of new cycle
     }
+    return CyclePhase.menstruation;
   }
 
   void _updatePhase() {
-    if (_periodStartDate == null) return;
     _currentPhase = getPhaseForDate(DateTime.now());
   }
 
@@ -111,43 +92,49 @@ class MenstrualCycleProvider with ChangeNotifier {
     return _periodStartDate!.add(Duration(days: _averageCycleLength));
   }
 
-  Future<void> saveData() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (_periodStartDate != null) {
-      await prefs.setString('periodStartDate', _periodStartDate!.toIso8601String());
-    }
-    if (_periodEndDate != null) {
-      await prefs.setString('periodEndDate', _periodEndDate!.toIso8601String());
-    }
-    await prefs.setString('symptoms', _symptoms);
-    await prefs.setString('notes', _notes);
-    if (_selectedMood != null) {
-      await prefs.setString('mood', _selectedMood.toString());
-    }
+  void resetData() {
+    _periodStartDate = null;
+    _periodEndDate = null;
+    _currentPhase = CyclePhase.menstruation;
+    _selectedMood = null;
+    _symptoms = '';
+    _notes = '';
+    menstruationDates.clear();
+    notifyListeners();
   }
 
-  Future<void> loadData() async {
-    final prefs = await SharedPreferences.getInstance();
-    final startDateStr = prefs.getString('periodStartDate');
-    final endDateStr = prefs.getString('periodEndDate');
-    
-    if (startDateStr != null) {
-      _periodStartDate = DateTime.parse(startDateStr);
+  Future<void> loadFromDatabase() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    menstruationDates = (await _repository.getMenstruationDates(user.uid)).toSet();
+    if (menstruationDates.isNotEmpty) {
+      final sorted = menstruationDates.toList()..sort();
+      _periodStartDate = sorted.first;
+      _periodEndDate = sorted.last;
+    } else {
+      _periodStartDate = null;
+      _periodEndDate = null;
     }
-    if (endDateStr != null) {
-      _periodEndDate = DateTime.parse(endDateStr);
-    }
-    
     _updatePhase();
-    _symptoms = prefs.getString('symptoms') ?? '';
-    _notes = prefs.getString('notes') ?? '';
-    final moodStr = prefs.getString('mood');
-    if (moodStr != null) {
-      _selectedMood = MoodType.values.firstWhere(
-        (e) => e.toString() == moodStr,
-        orElse: () => MoodType.happy,
-      );
-    }
     notifyListeners();
+  }
+
+  Future<void> saveMenstruationRange(DateTime start, DateTime end) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    await _repository.saveMenstruationRange(user.uid, start, end);
+    await loadFromDatabase();
+  }
+
+  Future<void> saveToDatabase(DateTime date) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final entry = CalendarEntry(
+      firebaseUserId: user.uid,
+      date: date.toString().split(' ')[0],
+      mood: _selectedMood?.toString(),
+      note: _symptoms.isNotEmpty ? _symptoms : _notes,
+    );
+    await _repository.saveEntry(entry);
   }
 } 

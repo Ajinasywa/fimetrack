@@ -36,7 +36,7 @@ void main() async {
   await flutterLocalNotificationsPlugin.initialize(initializationSettings);
 
   final provider = MenstrualCycleProvider();
-  await provider.loadData();
+  await provider.loadFromDatabase();
   
   runApp(
     MultiProvider(
