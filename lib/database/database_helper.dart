@@ -18,8 +18,8 @@ class DatabaseHelper {
   Future<Database> initDatabase() async {
     String path = join(await getDatabasesPath(), 'fimetrack.db');
     
-    // Delete existing database if it exists
-    await deleteDatabase(path);
+    // Jangan hapus database setiap kali aplikasi dijalankan!
+    // await deleteDatabase(path);
     
     return await openDatabase(
       path,

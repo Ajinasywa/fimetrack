@@ -95,4 +95,14 @@ class CalendarRepository {
     );
     return maps.map((map) => DateTime.parse(map['date'])).toList();
   }
+
+  // Hapus semua entri menstruasi untuk user
+  Future<void> deleteAllMenstruationEntries(String userId) async {
+    final db = await _databaseHelper.database;
+    await db.delete(
+      'calendar_entries',
+      where: 'firebase_user_id = ? AND is_menstruation = 1',
+      whereArgs: [userId],
+    );
+  }
 } 

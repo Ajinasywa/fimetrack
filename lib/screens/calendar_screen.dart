@@ -70,27 +70,44 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 
   Color _getPhaseColor(DateTime day, MenstrualCycleProvider provider) {
-    // Jika hari ini adalah hari menstruasi
-    if (provider.menstruationDates.contains(DateTime(day.year, day.month, day.day))) {
-      return const Color(0xFFFF7B9C).withAlpha(77); // Pink
-    }
-    // Jika belum ada data menstruasi, tidak diwarnai
-    if (provider.periodEndDate == null || provider.periodStartDate == null) {
-      return Colors.transparent;
-    }
-    // Hitung urutan fase setelah menstruasi
     final sorted = provider.menstruationDates.toList()..sort();
     if (sorted.isEmpty) return Colors.transparent;
-    final lastMenstruation = sorted.last;
-    final dayDiff = day.difference(lastMenstruation).inDays;
-    if (day.isAfter(lastMenstruation)) {
-      if (dayDiff <= 11) {
-        return Colors.blue.withAlpha(77); // Folikular (11 hari setelah menstruasi)
-      } else if (dayDiff == 12) {
-        return Colors.green.withAlpha(77); // Ovulasi (hari ke-12 setelah menstruasi)
-      } else if (dayDiff <= 23) {
-        return Colors.purple.withAlpha(77); // Luteal (hari ke-13 sampai ke-23 setelah menstruasi)
+
+    // Cari siklus menstruasi terakhir sebelum/tanggal hari ini
+    DateTime? lastCycleStart;
+    for (final d in sorted) {
+      if (!d.isAfter(day)) {
+        lastCycleStart = d;
+      } else {
+        break;
       }
+    }
+
+    // Jika belum ada siklus sebelum hari ini, gunakan siklus pertama dan hitung mundur
+    if (lastCycleStart == null) {
+      lastCycleStart = sorted.first;
+    }
+
+    // Hitung dayIndex relatif terhadap siklus terakhir
+    int dayIndex = day.difference(lastCycleStart).inDays;
+    int cycleLength = provider.averageCycleLength;
+    if (dayIndex < 0) {
+      // Untuk tanggal sebelum siklus pertama, hitung mundur ke belakang
+      dayIndex = cycleLength - (lastCycleStart.difference(day).inDays.abs() % cycleLength);
+      if (dayIndex == cycleLength) dayIndex = 0;
+    } else {
+      // Untuk tanggal setelah siklus terakhir, looping siklus
+      dayIndex = dayIndex % cycleLength;
+    }
+
+    if (dayIndex >= 0 && dayIndex <= 6) {
+      return const Color(0xFFFF7B9C).withAlpha(77); // Menstruasi (pink)
+    } else if (dayIndex >= 7 && dayIndex <= 17) {
+      return Colors.blue.withAlpha(77); // Folikular (biru)
+    } else if (dayIndex == 18) {
+      return Colors.green.withAlpha(77); // Ovulasi (hijau)
+    } else if (dayIndex >= 19 && dayIndex <= 27) {
+      return Colors.purple.withAlpha(77); // Luteal (ungu)
     }
     return Colors.transparent;
   }
@@ -108,9 +125,16 @@ class _CalendarScreenState extends State<CalendarScreen> {
         if (entry != null) {
           _symptomsController.text = entry.symptom ?? '';
           _notesController.text = entry.note ?? '';
+          if (entry.mood != null) {
+            final found = MoodType.values.where((e) => e.toString() == entry.mood);
+            _selectedMood = found.isNotEmpty ? found.first : null;
+          } else {
+            _selectedMood = null;
+          }
         } else {
           _symptomsController.clear();
           _notesController.clear();
+          _selectedMood = null;
         }
       });
     } catch (e) {
@@ -223,11 +247,15 @@ class _CalendarScreenState extends State<CalendarScreen> {
                       shape: BoxShape.circle,
                     ),
                   ),
-                  onDaySelected: (selectedDay, focusedDay) {
+                  onDaySelected: (selectedDay, focusedDay) async {
                     setState(() {
                       _periodStartDay = selectedDay;
                       _focusedDay = focusedDay;
                     });
+                    await loadDayData(selectedDay);
+                    final provider = Provider.of<MenstrualCycleProvider>(context, listen: false);
+                    await provider.loadFromDatabase();
+                    setState(() {});
                   },
                   onRangeSelected: (start, end, focusedDay) async {
                     setState(() {
@@ -238,6 +266,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     if (start != null && end != null) {
                       final provider = Provider.of<MenstrualCycleProvider>(context, listen: false);
                       await provider.saveMenstruationRange(start, end);
+                      // Setelah simpan, reload data agar warna siklus langsung update
+                      await provider.loadFromDatabase();
+                      setState(() {});
                     }
                   },
                   calendarBuilders: CalendarBuilders(

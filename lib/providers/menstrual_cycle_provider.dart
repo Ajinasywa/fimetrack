@@ -122,6 +122,9 @@ class MenstrualCycleProvider with ChangeNotifier {
   Future<void> saveMenstruationRange(DateTime start, DateTime end) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
+    // Hapus semua entri menstruasi lama user
+    await _repository.deleteAllMenstruationEntries(user.uid);
+    // Simpan range baru
     await _repository.saveMenstruationRange(user.uid, start, end);
     await loadFromDatabase();
   }
